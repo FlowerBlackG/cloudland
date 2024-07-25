@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MulanPSL-2.0
+
+/*
+ * cmake config file
+ * created on 2024.7.25 at Haidian, Beijing
+ * 
+ * don't modify config.cpp directly.
+ * when config.cpp.in is changed, running 'make' will generate config.cpp automatically.
+ */
+
+
+#include "./config.h"
+using namespace std;
+
+// cloudland's version
+const string CLOUDLAND_VERSION_NAME = "@CLOUDLAND_VERSION_NAME@";
+const int64_t CLOUDLAND_VERSION_MAJOR = @CLOUDLAND_VERSION_MAJOR@;
+const int64_t CLOUDLAND_VERSION_MINOR = @CLOUDLAND_VERSION_MINOR@;
+const int64_t CLOUDLAND_VERSION_PATCH = @CLOUDLAND_VERSION_PATCH@;
+const int64_t CLOUDLAND_VERSION_CODE = @CLOUDLAND_VERSION_CODE@;
+
+/** example: 2024-04-21T06:00:52Z */
+const string CLOUDLAND_BUILD_TIME_ISO8601 = "@CLOUDLAND_BUILD_TIME_ISO8601@";
+
+/** example: April 21, 2024 14:00:52 CST */
+const string CLOUDLAND_BUILD_TIME_HUMAN_READABLE = "@CLOUDLAND_BUILD_TIME_HUMAN_READABLE@";
+
