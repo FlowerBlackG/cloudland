@@ -8,8 +8,12 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/vesper",
-            "args": [],
+            "program": "${workspaceFolder}/target/cloudland",
+            "args": [
+                "--mount-point", "${workspaceFolder}/target/mount-point",
+                "--data-dir", "${workspaceFolder}/target/data-dir",
+                "--fs", "alipan"
+            ],
             "cwd": "${workspaceFolder}/target",
             "environment": [],
             "MIMode": "gdb",
@@ -28,7 +32,7 @@
             "name": "(GDB) Open a core dump (C/C++)",
             "request": "launch",
             "type": "cppdbg",
-            "program": "${workspaceFolder}/target/vesper",
+            "program": "${workspaceFolder}/target/cloudland",
             "coreDumpPath": "${input:coreFile}",
             "cwd": "${workspaceFolder}/target",
             "MIMode": "gdb",

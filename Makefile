@@ -67,15 +67,21 @@ clean:
 	rm -f ./src/config.cpp
 
 
+.PHONY: --remove-debug-dirs
+--remove-debug-dirs:
+	-fusermount3 -q -u ./target/mount-point
+	-rm -r ./target/mount-point
+	-rm -r ./target/data-dir
+
+
 .PHONY: --run
---run:
+--run: --remove-debug-dirs
 	cd target \
-	&& fusermount3 -q -u mount-point \
-	&& rm -rf ./data-dir \
-	&& mkdir data-dir
-	&& mkdir -p mount-point \
-	&& ./cloudland --mount-point ./mount-point \
-	--data-dir ./data-dir
+	&& ./cloudland \
+		--mount-point ./mount-point \
+		--data-dir ./data-dir \
+		--fs alipan
+
 
 
 .PHONY: run

@@ -18,10 +18,12 @@ namespace log {
 
 binary_semaphore logLock {1};
     
-inline static void printLineInfo(const char* filename, int line) {
+inline static void printLineInfo(const char* filename, const char* funcname, int line) {
     clog << "[" 
         << filename 
         << " " 
+        << funcname
+        << " "
         << line 
         << "]";
 }
@@ -39,8 +41,14 @@ inline static void printCurrentTime() {
     clog << timeStr;
 }
 
-void printInfo(const char* filename, int line) {
+void printInfo(const char* filename, const char* funcname, int line) {
     printCurrentTime();
+    
+#ifndef NDEBUG
+    clog << " ";
+    printLineInfo(filename, funcname, line);
+#endif
+
     clog << " ";
 }
 

@@ -55,6 +55,8 @@ add_compile_definitions(FUSE_USE_VERSION=316)
 ]]
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
+
 
 #[[ 
     targets
@@ -70,7 +72,8 @@ add_executable(
     find libs
 ]]
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/../cmake-modules)
-find_package(FUSE REQUIRED)
+find_package(FUSE3 REQUIRED)
+find_package(CURL REQUIRED)
 
 
 
@@ -79,14 +82,16 @@ find_package(FUSE REQUIRED)
 ]]
 
 include_directories(
-    ${FUSE_INCLUDE_DIR} 
+    ${FUSE3_INCLUDE_DIR} 
+    ${CURL_INCLUDE_DIR} 
 )
 
 
 target_link_libraries(
     ${PROJECT_NAME} 
 
-    ${FUSE_LIBRARIES}
+    ${FUSE3_LIBRARIES}
+    ${CURL_LIBRARIES}
 )
 
 

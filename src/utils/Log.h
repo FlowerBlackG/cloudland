@@ -26,7 +26,7 @@ extern std::binary_semaphore logLock;
 #define CLOUDLAND_LOG_MUTEX_LOCK() cloudland::log::logLock.acquire();
 #define CLOUDLAND_LOG_MUTEX_UNLOCK() cloudland::log::logLock.release();
 
-void printInfo(const char* filename, int line);
+void printInfo(const char* filename, const char* funcname, int line);
 
 inline void printContent() {
     std::clog << std::endl;
@@ -66,7 +66,7 @@ inline void setColorError() {
 #define LOG_PLAIN(...) \
     { \
         cloudland::log::printInfo( \
-            __FILE_NAME__, __LINE__ \
+            __FILE_NAME__, __func__, __LINE__ \
         ); \
         cloudland::log::printContent(__VA_ARGS__); \
     }

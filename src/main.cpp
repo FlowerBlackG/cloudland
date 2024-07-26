@@ -12,15 +12,22 @@
 #include <set>
 #include <vector>
 #include <string>
+#include <cstring>
+
+#include <filesystem>
 
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
 
 #include <fuse3/fuse.h>
+#include <curl/curl.h>
 
 #include "./utils/Log.h"
 #include "./config.h"
+
+#include "./fs/fs.h"
+#include "./GlobalData.h"
 
 
 using namespace std;
@@ -193,9 +200,13 @@ static void version(bool useLog) {
             " (", CLOUDLAND_VERSION_CODE,")"
         );
 
+
         LOG_INFO(
-            "fuse version: ", FUSE_MAJOR_VERSION, ".", FUSE_MINOR_VERSION
+            "fuse version: ", fuse_pkgversion(), " (", fuse_version(), ")"
         );
+        LOG_INFO(
+            "libcurl version: ", curl_version()
+        )
 
         LOG_INFO("cloudland complication time: ", CLOUDLAND_BUILD_TIME_HUMAN_READABLE);
 
@@ -206,7 +217,8 @@ static void version(bool useLog) {
             << " (" << CLOUDLAND_VERSION_CODE << ")" << endl
             << "" << CLOUDLAND_BUILD_TIME_HUMAN_READABLE << endl;
         cout << "------------" << endl;
-        cout << "fuse: " << FUSE_MAJOR_VERSION << "." << FUSE_MINOR_VERSION << endl;
+        cout << "fuse: " << fuse_pkgversion() << " (" << fuse_version() << ")" << endl;
+        cout << "libcurl: " << curl_version() << endl;
     
     }
 }
@@ -261,22 +273,66 @@ static int buildOptions() {
 };
 
 
-static int buildFuseArgs(vector<string>& argvS, vector<char*>& argv) {
+static int buildFuseArgs(
+    int cArgC, 
+    const char* cArgV[],
+    vector<string>& fuseArgVS, 
+    vector<char*>& fuseArgV
+) {
+
+    if (cArgC == 0) {
+        LOG_ERROR("why my argc is 0?")
+        return -1;
+    }
+
+    fuseArgVS.push_back(cArgV[0]);
 
     if (!options.daemonize) {
-        argvS.push_back("-f");
+        fuseArgVS.push_back("-f");
     }
 
 
-    argvS.push_back("--");
-    argvS.push_back(options.mountPoint);
+#ifndef NDEBUG
+    fuseArgVS.push_back("-d");
+    fuseArgVS.push_back("-s");
+#endif
+
+
+
+    fuseArgVS.push_back("--");
+    fuseArgVS.push_back(options.mountPoint);
 
 
     // build char*[]
 
-    for (auto& it : argvS) {
-        argv.push_back(it.data());
+    for (auto& it : fuseArgVS) {
+        fuseArgV.push_back(it.data());
     }
+
+    return 0;
+}
+
+
+static int prepareDirs() {
+    mkdir(options.dataDir.c_str(), S_IRWXU);
+    mkdir(options.mountPoint.c_str(), S_IRWXU);
+    return 0;
+}
+
+
+// process options further
+static int cookOptions() {
+
+    options.mountPoint = filesystem::canonical(filesystem::path(options.mountPoint));
+    options.dataDir = filesystem::canonical(filesystem::path(options.dataDir));
+
+    return 0;
+}
+
+
+static int prepareGlobalData() {
+
+    cloudland::globalData.dataDir = options.dataDir;
 
     return 0;
 }
@@ -305,53 +361,43 @@ int main(int argc, const char* argv[], const char* env[]) {
     }
 
     processEnvVars(env);
-
     if (processPureQueryCmds()) {
         return 0;
     }
 
     if (int res = buildOptions()) { 
-        usage(); 
         return res; 
     }
 
+    if (int res = prepareDirs()) {
+        return res;
+    }
 
-    fuse_operations fs {0};
-    fs.readdir = [] (
-        const char * path, 
-        void * buffer, 
-        fuse_fill_dir_t filler, 
-        off_t offset,
-        fuse_file_info * fi,
-        fuse_readdir_flags flags
-    ) {
+    if (int res = cookOptions()) {
+        return res;
+    }
 
-        struct stat st;
-        st.st_ino = 999999;
-        st.st_mode = 0777;
-        filler(buffer, "example", &st, 0, FUSE_FILL_DIR_PLUS);
-
-        return 0;
-    };
-
-    fs.getattr = [] (
-        const char* path,
-        struct stat* stbuf,
-        fuse_file_info* fi
-    ) {
-        return 0;
-    };
+    if (int res = prepareGlobalData()) {
+        return res;
+    }
 
 
     vector<string> fuseArgVS;
     vector<char*> fuseArgV;
 
-    if (int res = buildFuseArgs(fuseArgVS, fuseArgV)) {
+    if (int res = buildFuseArgs(argc, argv, fuseArgVS, fuseArgV)) {
         LOG_ERROR("failed to build fuse arguments!");
         return res;
     }
 
-    auto fuseResCode = fuse_main(fuseArgV.size(), fuseArgV.data(), &fs, (void*)0xfb);
+    auto fuseOperations = cloudland::fs::getFuseOperations(options.fs);
+    if (!fuseOperations) {
+        LOG_ERROR("failed to load driver for: ", options.fs);
+        return -1;
+    }
+
+    auto fuseResCode = fuse_main(fuseArgV.size(), fuseArgV.data(), fuseOperations, nullptr);
+
 
     cleanup();
     return fuseResCode;
