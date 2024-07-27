@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [{
+        "label": "umount target/mount-point",
+        "command": "umount",
+        "args": ["${workspaceFolder}/target/mount-point"],
+        "type": "shell"
+    }, {
+        "label": "make",
+        "command": "make",
+        "type": "shell",
+        "options": {
+            "cwd": "${workspaceFolder}"
+        }
+    }, {
+        "label": "prepare debug launch",
+        "dependsOn": [
+            "umount target/mount-point",
+            "make"
+        ]
+    }]
+}

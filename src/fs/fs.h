@@ -15,10 +15,10 @@
 namespace cloudland {
 namespace fs {
 
-class Base;
+class FsDriverBase;
 
 
-Base* getFSInstance(const std::string& name);
+FsDriverBase* getFSInstance(const std::string& name);
 fuse_operations* getFuseOperations(const std::string& name);
 
 

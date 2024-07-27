@@ -8,7 +8,7 @@
 
 
 
-#include "./Mirror.h"
+#include "./FsDriver.h"
 #include "../../GlobalData.h"
 
 #include <string>
@@ -22,15 +22,15 @@ using namespace std;
 
 namespace cloudland {
 namespace fs {
-
-
-CLOUDLAND_FS_PREPARE_CLASS_CPP(Mirror)
-
+namespace mirror {
 
 
 
+CLOUDLAND_FS_PREPARE_CLASS_CPP()
 
-int Mirror::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
+
+
+int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
     LOG_INFO("mirror getattr")
 
     auto res = lstat((globalData.dataDir + path).c_str(), st);
@@ -41,7 +41,7 @@ int Mirror::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
 }
 
 
-int Mirror::fsReadLink(const char* path, char* buf, size_t size) {
+int FsDriver::fsReadLink(const char* path, char* buf, size_t size) {
 
 
     LOG_ERROR("Method not implemented.")
@@ -49,36 +49,21 @@ int Mirror::fsReadLink(const char* path, char* buf, size_t size) {
 }
 
 
-int Mirror::fsMkdir(const char* path, mode_t mode) {
+int FsDriver::fsMkdir(const char* path, mode_t mode) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsUnlink(const char* path) {
+int FsDriver::fsUnlink(const char* path) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsRmdir(const char* path) {
-
-
-    LOG_ERROR("Method not implemented.")
-    return -ENOSYS;
-}
-
-
-int Mirror::fsSymlink(const char* from, const char* to) {
-
-    LOG_ERROR("Method not implemented.")
-    return -ENOSYS;
-}
-
-
-int Mirror::fsRename(const char* from, const char* to, unsigned int flags) {
+int FsDriver::fsRmdir(const char* path) {
 
 
     LOG_ERROR("Method not implemented.")
@@ -86,7 +71,14 @@ int Mirror::fsRename(const char* from, const char* to, unsigned int flags) {
 }
 
 
-int Mirror::fsLink(const char* from, const char* to) {
+int FsDriver::fsSymlink(const char* from, const char* to) {
+
+    LOG_ERROR("Method not implemented.")
+    return -ENOSYS;
+}
+
+
+int FsDriver::fsRename(const char* from, const char* to, unsigned int flags) {
 
 
     LOG_ERROR("Method not implemented.")
@@ -94,14 +86,7 @@ int Mirror::fsLink(const char* from, const char* to) {
 }
 
 
-int Mirror::fsTruncate(const char* path, off_t size, fuse_file_info* fi) {
-
-    LOG_ERROR("Method not implemented.")
-    return -ENOSYS;
-}
-
-
-int Mirror::fsOpen(const char* path, fuse_file_info* fi) {
+int FsDriver::fsLink(const char* from, const char* to) {
 
 
     LOG_ERROR("Method not implemented.")
@@ -109,7 +94,14 @@ int Mirror::fsOpen(const char* path, fuse_file_info* fi) {
 }
 
 
-int Mirror::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
+int FsDriver::fsTruncate(const char* path, off_t size, fuse_file_info* fi) {
+
+    LOG_ERROR("Method not implemented.")
+    return -ENOSYS;
+}
+
+
+int FsDriver::fsOpen(const char* path, fuse_file_info* fi) {
 
 
     LOG_ERROR("Method not implemented.")
@@ -117,42 +109,50 @@ int Mirror::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_
 }
 
 
-int Mirror::fsWrite(const char* path, const char* buf, size_t size, off_t offset, fuse_file_info* fi) {
+int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
+
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsStatfs(const char* path, struct statvfs* stbuf) {
+int FsDriver::fsWrite(const char* path, const char* buf, size_t size, off_t offset, fuse_file_info* fi) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsSetXAttr(const char* path, const char* name, const char* value, size_t size, int flags) {
+int FsDriver::fsStatfs(const char* path, struct statvfs* stbuf) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsGetXAttr(const char* path, const char* name, char* value, size_t size) {
+int FsDriver::fsSetXAttr(const char* path, const char* name, const char* value, size_t size, int flags) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsListXAttr(const char* path, char* list, size_t size) {
+int FsDriver::fsGetXAttr(const char* path, const char* name, char* value, size_t size) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
 }
 
 
-int Mirror::fsOpenDir(const char* path, fuse_file_info* fi) {
+int FsDriver::fsListXAttr(const char* path, char* list, size_t size) {
+
+    LOG_ERROR("Method not implemented.")
+    return -ENOSYS;
+}
+
+
+int FsDriver::fsOpenDir(const char* path, fuse_file_info* fi) {
 
 
     LOG_INFO("mirror opendir")
@@ -160,7 +160,7 @@ int Mirror::fsOpenDir(const char* path, fuse_file_info* fi) {
 }
 
 
-int Mirror::fsReadDir(
+int FsDriver::fsReadDir(
     const char* path, 
     void* buf, 
     fuse_fill_dir_t filler, 
@@ -193,27 +193,27 @@ int Mirror::fsReadDir(
 
 
 
-int Mirror::fsReleaseDir(const char* path, fuse_file_info* fi) {
+int FsDriver::fsReleaseDir(const char* path, fuse_file_info* fi) {
 
     LOG_INFO("mirror releasedir")
     return 0;
 }
 
 
-void* Mirror::fsInit(fuse_conn_info* conn, fuse_config* cfg) {
+void* FsDriver::fsInit(fuse_conn_info* conn, fuse_config* cfg) {
     
     return nullptr;
 }
 
 
-void Mirror::fsDestroy(void* privateData) {
+void FsDriver::fsDestroy(void* privateData) {
 
 
     
 }
 
 
-int Mirror::fsAccess(const char* path, int mask) {
+int FsDriver::fsAccess(const char* path, int mask) {
 
     LOG_INFO("mirror access")
 
@@ -226,7 +226,7 @@ int Mirror::fsAccess(const char* path, int mask) {
 }
 
 
-int Mirror::fsCreate(const char* path, mode_t mode, fuse_file_info* fi) {
+int FsDriver::fsCreate(const char* path, mode_t mode, fuse_file_info* fi) {
 
     LOG_ERROR("Method not implemented.")
     return -ENOSYS;
@@ -236,6 +236,7 @@ int Mirror::fsCreate(const char* path, mode_t mode, fuse_file_info* fi) {
 
 
 
+}  // namespace mirror
 }  // namespace cloudland
 }  // namespace fs
 

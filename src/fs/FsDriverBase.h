@@ -16,8 +16,12 @@ namespace cloudland {
 namespace fs {
 
 
-class Base {
+class FsDriverBase {
+
 public:
+    FsDriverBase();
+    virtual ~FsDriverBase();
+
     virtual int fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi);
     virtual int fsReadLink(const char* path, char* buf, size_t size);
     virtual int fsMkdir(const char* path, mode_t mode);
@@ -49,10 +53,8 @@ public:
     virtual int fsAccess(const char* path, int mask);
     virtual int fsCreate(const char* path, mode_t mode, fuse_file_info* fi);
 
-
-
-
-CLOUDLAND_FS_PREPARE_CLASS_HEADER()
+    
+    virtual fuse_operations* getFuseOperations();
 
 
 };

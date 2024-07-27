@@ -24,22 +24,22 @@ help:
 
 .PHONY: prepare-debug
 prepare-debug:
-	mkdir -p build && cd build \
+	@mkdir -p build && cd build \
 	&& cmake -DCMAKE_BUILD_TYPE=Debug -G"Ninja" ../src
 
 
 .PHONY: prepare-release
 prepare-release:
-	mkdir -p build && cd build \
+	@mkdir -p build && cd build \
 	&& cmake -DCMAKE_BUILD_TYPE=Release -G"Ninja" ../src
 
 
 # private target: --build
 .PHONY: --build
 --build:
-	cd build && cmake --build . -- -j 8
-	mkdir -p target && cp build/cloudland target/
-	cd target && mkdir -p asm-dump \
+	@cd build && cmake --build . -- -j 8
+	@mkdir -p target && cp build/cloudland target/
+	@cd target && mkdir -p asm-dump \
 	&& objdump -d ./cloudland > asm-dump/cloudland.text.asm
 	@echo -e "\033[32mbuild success (cloudland).\033[0m"
 

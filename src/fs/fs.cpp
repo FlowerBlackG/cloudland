@@ -9,9 +9,9 @@
 
 #include "./fs.h"
 #include "../utils/Log.h"
-#include "./Base.h"
-#include "./Mirror/Mirror.h"
-#include "./Alipan/Alipan.h"
+#include "./FsDriverBase.h"
+#include "./mirror/FsDriver.h"
+#include "./alipan/FsDriver.h"
 
 using namespace std;
 
@@ -20,21 +20,14 @@ namespace fs {
 
 
 
-Base* getFSInstance(const string& name) {
+FsDriverBase* getFSInstance(const string& name) {
     if (name == "mirror") {
-        return Mirror::getInstance();
+        return mirror::FsDriver::getInstance();
     } else if (name == "onedrive") {
 
     } else if (name == "alipan") {
-        return Alipan::getInstance();
+        return alipan::FsDriver::getInstance();
     } 
-
-#ifndef NDEBUG
-    else if (name == "base") {
-        LOG_WARN("'base' should only be used for debug purpose.")
-        return Base::getInstance();
-    }
-#endif
 
 
     return nullptr;

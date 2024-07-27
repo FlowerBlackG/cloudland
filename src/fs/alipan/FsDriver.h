@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MulanPSL-2.0
 /*
-    mirror fs
-
-    this fs is used for test purpose.
+    alipan by aliyun fs
 
     created on 2024.7.26 at Haidian, Beijing
 
@@ -11,14 +9,23 @@
 
 #pragma once
 
-#include "../Base.h"
+#include "../FsDriverBase.h"
+
+#include <string>
+
+#include <nlohmann/json.hpp>
 
 
 namespace cloudland {
 namespace fs {
+namespace alipan {
 
 
-class Mirror : public Base {
+class FsDriver : public FsDriverBase {
+
+public:
+    FsDriver();
+    virtual ~FsDriver();
 
 public:
     virtual int fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) override;
@@ -57,10 +64,34 @@ public:
 CLOUDLAND_FS_PREPARE_CLASS_HEADER()
 
 
+public:
+    bool isLoggedIn();
+    bool isNotLoggedIn();
+
+
+protected:
+
+    nlohmann::json miniDB;
+
+
 };
 
 
 
+struct MiniDBKey {
+protected:
+    MiniDBKey() = delete;
+
+public:
+    static std::string OAUTH_ACCESS_TOKEN;
+    static std::string OAUTH_REFRESH_TOKEN;
+    static std::string OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC;
+
+};
+
+
+
+}  // namespace alipan
 }  // namespace cloudland
 }  // namespace fs
 
