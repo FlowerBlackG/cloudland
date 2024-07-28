@@ -27,6 +27,10 @@ public:
 
     SList& append(const std::string&);
 
+    bool isEmpty();
+    bool isNotEmpty();
+
+    curl_slist* raw();
 
     operator curl_slist* ();
 

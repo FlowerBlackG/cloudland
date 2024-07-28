@@ -26,6 +26,15 @@ extern time_t oauthAccessTokenExpireTimeSec;
 const std::string oauthAuthorizeUrl();
 int64_t code2accessToken(const std::string& code);
 
+int64_t getDriveInfo(
+    std::string* userid = nullptr,
+    std::string* username = nullptr,
+    std::string* userAvatar = nullptr,
+    std::string* defaultDriveId = nullptr,
+    std::string* resourceDriveId = nullptr,
+    std::string* backupDriveId = nullptr
+);
+
 
 
 }  // namespace api

@@ -56,6 +56,11 @@ FsDriver::FsDriver() {
     if (in.is_open()) {
         in >> this->miniDB;
     }
+
+    if (isLoggedIn()) {
+        api::oauthAccessToken = miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN];
+        api::oauthAccessTokenExpireTimeSec = miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC];
+    }
 }
 
 
@@ -71,31 +76,35 @@ FsDriver::~FsDriver() {
 
 
 
+static int guestGetAttr(const string& path, struct stat* st) {
+    if (path == "/" || path == OAUTH_NOTE_FILEPATH) {
+
+        st->st_gid = getgid();
+        st->st_uid = getuid();
+        st->st_blksize = 4096;
+        st->st_size = 4096;
+        st->st_blocks = 0;
+        st->st_mode = S_IRWXU;
+
+        if (path == "/") {
+            st->st_mode |= S_IFDIR;
+        } else if (path == OAUTH_NOTE_FILEPATH) {
+            st->st_mode |= S_IFREG;
+            st->st_size = makeLoginNoteFileContent().length();
+        }
+        
+        return 0;
+    } else {
+        return -ENOENT;
+    }
+}
+
+
 int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
     string strPath = path;
-    string dataPath = globalData.dataDir + strPath;
 
     if (isNotLoggedIn()) {
-        if (strPath == "/" || strPath == OAUTH_NOTE_FILEPATH) {
-
-            st->st_gid = getgid();
-            st->st_uid = getuid();
-            st->st_blksize = 4096;
-            st->st_size = 4096;
-            st->st_blocks = 0;
-            st->st_mode = S_IRWXU;
-
-            if (strPath == "/") {
-                st->st_mode |= S_IFDIR;
-            } else if (strPath == OAUTH_NOTE_FILEPATH) {
-                st->st_mode |= S_IFREG;
-                st->st_size = makeLoginNoteFileContent().length();
-            }
-            
-            return 0;
-        } else {
-            return -ENOENT;
-        }
+        return guestGetAttr(strPath, st);
     }
 
 
@@ -176,9 +185,8 @@ int FsDriver::fsOpen(const char* path, fuse_file_info* fi) {
 }
 
 
-int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
-    string strPath = path;
-    if (isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
+static int guestRead(const string& path, char* buf, size_t size, off_t offset) {
+    if (path == OAUTH_NOTE_FILEPATH) {
         const auto loginNote = makeLoginNoteFileContent();
         if ((uint64_t) (offset) >= loginNote.length()) {
             return 0;
@@ -190,6 +198,16 @@ int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fus
             *pBuf++ = *pContent++;
         }
         return (int) (pBuf - buf);
+    } else {
+        return -ENOENT;
+    }
+}
+
+
+int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
+    string strPath = path;
+    if (isNotLoggedIn()) {
+        return guestRead(strPath, buf, size, offset);
     }
 
     LOG_ERROR("Method not implemented.")
@@ -207,17 +225,16 @@ int FsDriver::fsWrite(const char* path, const char* buf, size_t size, off_t offs
         }
 
         auto oauthCode = content.substr(posOfCode + strlen("code="));
-
-        // get access_token
-
-        auto res = api::code2accessToken(oauthCode);
-        LOG_WARN("token: ", api::oauthAccessToken);
-        LOG_WARN("expir: ", api::oauthAccessTokenExpireTimeSec); // todo
-        // todo
+        auto tryLoginResCode = tryLogin(oauthCode);
+        if (tryLoginResCode) {
+            return -ENOENT;
+        } else {
+            return size;
+        }
     }
 
+
     LOG_ERROR("Method not implemented.")
-    return size;
     return -ENOSYS;
 }
 
@@ -268,6 +285,29 @@ int FsDriver::fsOpenDir(const char* path, fuse_file_info* fi) {
 }
 
 
+static int guestReadDir(
+    const string& path, 
+    void* buf, 
+    fuse_fill_dir_t filler, 
+    off_t offset, 
+    fuse_file_info* fi, 
+    fuse_readdir_flags flags
+) {
+    if (path != "/") {
+        return -ENOENT;
+    } else {
+        // show oauth note.
+
+        struct stat st {0};
+        st.st_mode = S_IRWXU;
+
+        filler(buf, OAUTH_NOTE_FILENAME, &st, 0, FUSE_FILL_DIR_PLUS);
+
+        return 0;
+    }
+}
+
+
 int FsDriver::fsReadDir(
     const char* path, 
     void* buf, 
@@ -278,18 +318,7 @@ int FsDriver::fsReadDir(
 ) {
     string strPath = path;
     if (isNotLoggedIn()) {
-        if (strPath != "/") {
-            return -ENOSYS;
-        } else {
-            // show oauth note.
-
-            struct stat st {0};
-            st.st_mode = S_IRWXU;
-
-            filler(buf, OAUTH_NOTE_FILENAME, &st, 0, FUSE_FILL_DIR_PLUS);
-
-            return 0;
-        }
+        return guestReadDir(strPath, buf, filler, offset, fi, flags);
     }
 
     
@@ -332,6 +361,29 @@ int FsDriver::fsCreate(const char* path, mode_t mode, fuse_file_info* fi) {
 }
 
 
+int FsDriver::tryLogin(const string& code) {
+    // get access_token
+
+    auto res = api::code2accessToken(code);
+    if (res != 200) {
+        return -1;
+    }
+
+    miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN] = api::oauthAccessToken;
+    miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC] = api::oauthAccessTokenExpireTimeSec;
+
+    string userid, defaultDriveId;
+    res = api::getDriveInfo(&userid, nullptr, nullptr, &defaultDriveId);
+    if (res != 200) {
+        return -1;
+    }
+
+    miniDB[MiniDBKey::USERID] = userid;
+    miniDB[MiniDBKey::DEFAULT_DRIVE_ID] = defaultDriveId;
+    return 0;
+}
+
+
 bool FsDriver::isLoggedIn() {
     if (!miniDB.contains(MiniDBKey::OAUTH_ACCESS_TOKEN)) {
         return false;
@@ -363,6 +415,10 @@ string MiniDBKey::OAUTH_ACCESS_TOKEN = "oauth-access-token";
 string MiniDBKey::OAUTH_REFRESH_TOKEN = "oauth-refresh-token";
 string MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC = "oauth-access-token-expire-time-sec";
 
+string MiniDBKey::USERID = "alipan-userid";
+string MiniDBKey::DEFAULT_DRIVE_ID = "alipan-default-drive-id";
+string MiniDBKey::RESOURCE_DRIVE_ID = "alipan-resource-drive-id";
+string MiniDBKey::BACKUP_DRIVE_ID = "alipan-backup-drive-id";
 
 
 }  // namespace alipan

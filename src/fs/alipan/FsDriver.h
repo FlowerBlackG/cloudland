@@ -61,6 +61,9 @@ public:
     
 
 
+    int tryLogin(const std::string& code);
+
+
 CLOUDLAND_FS_PREPARE_CLASS_HEADER()
 
 
@@ -86,6 +89,11 @@ public:
     static std::string OAUTH_ACCESS_TOKEN;
     static std::string OAUTH_REFRESH_TOKEN;
     static std::string OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC;
+
+    static std::string USERID;
+    static std::string DEFAULT_DRIVE_ID;
+    static std::string RESOURCE_DRIVE_ID;
+    static std::string BACKUP_DRIVE_ID;
 
 };
 

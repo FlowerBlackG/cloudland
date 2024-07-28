@@ -28,19 +28,34 @@ SList::SList(const string& str) {
 
 
 SList::~SList() {
-    curl_slist_free_all(this->curlSList);
+    curl_slist_free_all(raw());
 }
 
 
 SList& SList::append(const string& str) {
-    this->curlSList = curl_slist_append(this->curlSList, str.c_str());
+    this->curlSList = curl_slist_append(raw(), str.c_str());
 
     return *this;
 }
 
 
-SList:: operator curl_slist* () {
+bool SList::isEmpty() {
+    return raw() == nullptr;
+}
+
+
+bool SList::isNotEmpty() {
+    return !isEmpty();
+}
+
+
+curl_slist* SList::raw() {
     return this->curlSList;
+}
+
+
+SList:: operator curl_slist* () {
+    return raw();
 }
 
 

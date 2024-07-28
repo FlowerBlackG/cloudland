@@ -35,6 +35,11 @@ static const string OAUTH_SCOPE = "user:base,file:all:read,file:all:write";
 static const string OAUTH_REDIRECT_URI = "https://www.gardilily.com/cloudland/redirect-uri.php";
 
 
+static void addAuthorizationHeader(curl::Easy& easy) {
+    easy.setHeader("Authorization", "Bearer " + api::oauthAccessToken);
+}
+
+
 const string oauthAuthorizeUrl() {
     string res = API_HOST;
     res += "/oauth/authorize";
@@ -66,9 +71,9 @@ int64_t code2accessToken(const string& code) {
     json["code"] = code;
     json["code_verifier"] = OAUTH_CODE_CHALLENGE_CODE;
     json["grant_type"] = "authorization_code";
-    easy.setPostBody(json.dump());
-    easy.setHeader("Content-Type", "application/json");
-    easy.execute();
+    easy.setPostBody(json.dump())
+        .setContentTypeJson()
+        .execute();
 
     int64_t resCode = easy.responseCode();
     if (resCode != 200) {
@@ -92,6 +97,57 @@ int64_t code2accessToken(const string& code) {
     oauthAccessTokenExpireTimeSec = utils::time::currentTimeSecs() + (time_t) resJson["expires_in"] - 30;
 
     return resCode;
+}
+
+
+
+int64_t getDriveInfo(
+    string* userid,
+    string* username,
+    string* userAvatar,
+    string* defaultDriveId,
+    string* resourceDriveId,
+    string* backupDriveId
+) {
+    string url = API_HOST + "/adrive/v1.0/user/getDriveInfo";
+    curl::Easy easy;
+    easy.post(url)
+        .setContentTypeJson();
+    
+    addAuthorizationHeader(easy);
+
+    easy.execute();
+
+
+    if (easy.responseCode() != 200) {
+        LOG_ERROR("response code is: ", easy.responseCode());
+        return easy.responseCode();
+    }
+
+    auto json = nlohmann::json::parse(easy.responseBody());
+    if (json.contains("user_id") && userid) {
+        *userid = json["user_id"];
+    }
+
+    if (json.contains("name") && username) {
+        *username = json["name"];
+    }
+
+    if (json.contains("default_drive_id") && defaultDriveId) {
+        *defaultDriveId = json["default_drive_id"];
+    }
+
+    if (json.contains("resource_drive_id") && resourceDriveId) {
+        *defaultDriveId = json["resource_drive_id"];
+    }
+
+    if (json.contains("backup_drive_id") && backupDriveId) {
+        *backupDriveId = json["backup_drive_id"];
+    }
+
+
+
+    return easy.responseCode();
 }
 
 

@@ -24,6 +24,12 @@ namespace cloudland {
 namespace bindings {
 namespace curl {
 
+
+enum class RequestMethod {
+    POST, GET, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH
+};
+
+
 class Easy {
 public:
     Easy();
@@ -36,9 +42,10 @@ public:
     Easy& post(const std::string& url);
     Easy& get();
     Easy& get(const std::string& url);
+    Easy& setRequestMethod(const RequestMethod&);
     Easy& setPostBody(const std::string& data);
 
-
+    Easy& setContentTypeJson();
     Easy& setHeader(const std::string& key, const std::string& value);
 
 
@@ -56,11 +63,9 @@ public:
 protected:
     CURL* handle = nullptr;
 
-    /**
-     * When setting header, libcurl internals doesn't copies the content.
-     * So we have to keep it until the Easy object is used and retired.
-     */
-    std::vector<SList> headerHolder;
+    SList customHeaders;
+    bool postBodyFilled = false;
+    RequestMethod requestMethod = RequestMethod::GET;
     
     int64_t httpResponseCode = 0;
 };

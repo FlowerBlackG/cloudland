@@ -14,6 +14,7 @@
 
 #include "./Easy.h"
 #include "./init.h"
+#include "../../utils/Log.h"
 
 
 using namespace std;
@@ -75,7 +76,7 @@ Easy& Easy::setUrl(const string& url) {
 
 
 Easy& Easy::post() {
-    curl_easy_setopt(this->handle, CURLOPT_POST, 1);
+    this->setRequestMethod(RequestMethod::POST);
     return *this;
 }
 
@@ -89,7 +90,7 @@ Easy& Easy::post(const string& url) {
 
 
 Easy& Easy::get() {
-    curl_easy_setopt(this->handle, CURLOPT_HTTPGET, 1);
+    this->setRequestMethod(RequestMethod::GET);
     return *this;
 }
 
@@ -101,27 +102,54 @@ Easy& Easy::get(const string& url) {
 }
 
 
-Easy& Easy::setPostBody(const string& data) {
-    curl_easy_setopt(this->handle, CURLOPT_COPYPOSTFIELDS, data.data());
+Easy& Easy::setRequestMethod(const RequestMethod& method) {
+    if (method != RequestMethod::GET && method != RequestMethod::POST) {
+        LOG_ERROR("not supported.")
+        return *this;
+    }
+
+
+    if (method == RequestMethod::GET) {
+        curl_easy_setopt(this->handle, CURLOPT_HTTPGET, 1);
+    } else if (method == RequestMethod::POST) {
+        curl_easy_setopt(this->handle, CURLOPT_POST, 1);
+    }
+
+    this->requestMethod = method;
+
+
     return *this;
 }
 
 
-Easy& Easy::setHeader(const string& key, const string& value) {
-    curl_easy_setopt(
-        this->handle, 
-        CURLOPT_HTTPHEADER, 
-        (curl_slist*) this->headerHolder.emplace_back(key + ": " + value)
-    );
-    
+Easy& Easy::setPostBody(const string& data) {
+    curl_easy_setopt(this->handle, CURLOPT_COPYPOSTFIELDS, data.data());
+    postBodyFilled = true;
+    return *this;
+}
 
+
+
+Easy& Easy::setContentTypeJson() {
+    return this->setHeader("Content-Type", "application/json");
+}
+
+
+Easy& Easy::setHeader(const string& key, const string& value) {
+    this->customHeaders.append(key + ": " + value);
     return *this;
 }
 
 
 void Easy::execute() {
+    if (this->customHeaders.isNotEmpty()) {
+        curl_easy_setopt(this->handle, CURLOPT_HTTPHEADER, this->customHeaders.raw());
+    }
 
-
+    if (this->requestMethod == RequestMethod::POST && !this->postBodyFilled) {
+        this->setPostBody("");
+        // if we don't do this, libcurl will block itself when calling 'perform'.
+    }
 
     auto code = curl_easy_perform(this->handle);
     if (code != CURLE_OK) {
