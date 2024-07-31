@@ -17,6 +17,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <nlohmann/json.hpp>
 #include "./SList.h"
 
 
@@ -44,6 +45,8 @@ public:
     Easy& get(const std::string& url);
     Easy& setRequestMethod(const RequestMethod&);
     Easy& setPostBody(const std::string& data);
+    Easy& setPostBody(const char* data);
+    Easy& setPostBody(const nlohmann::json& json);
 
     Easy& setContentTypeJson();
     Easy& setHeader(const std::string& key, const std::string& value);

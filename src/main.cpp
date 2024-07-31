@@ -22,6 +22,7 @@
 
 #include <fuse3/fuse.h>
 #include <curl/curl.h>
+#include <nlohmann/json.hpp>
 
 #include "./utils/Log.h"
 #include "./config.h"
@@ -193,6 +194,11 @@ static void usage() {
 
 
 static void version(bool useLog) {
+
+    string jsonVersion = to_string(NLOHMANN_JSON_VERSION_MAJOR) + ".";
+    jsonVersion += to_string(NLOHMANN_JSON_VERSION_MINOR) + ".";
+    jsonVersion += to_string(NLOHMANN_JSON_VERSION_PATCH);
+    
     if (useLog) {
         LOG_INFO(
             "cloudland version : ", 
@@ -204,8 +210,13 @@ static void version(bool useLog) {
         LOG_INFO(
             "fuse version: ", fuse_pkgversion(), " (", fuse_version(), ")"
         );
+        
         LOG_INFO(
             "libcurl version: ", curl_version()
+        )
+
+        LOG_INFO(
+            "nlohmann json: ", jsonVersion
         )
 
         LOG_INFO("cloudland complication time: ", CLOUDLAND_BUILD_TIME_HUMAN_READABLE);
@@ -219,6 +230,7 @@ static void version(bool useLog) {
         cout << "------------" << endl;
         cout << "fuse: " << fuse_pkgversion() << " (" << fuse_version() << ")" << endl;
         cout << "libcurl: " << curl_version() << endl;
+        cout << "nlohmann json: " << jsonVersion << endl;
     
     }
 }
@@ -292,7 +304,7 @@ static int buildFuseArgs(
     }
 
 
-#ifndef NDEBUG
+#ifdef CLOUDLAND_LOG_FUSE
     fuseArgVS.push_back("-d");
     fuseArgVS.push_back("-s");
 #endif

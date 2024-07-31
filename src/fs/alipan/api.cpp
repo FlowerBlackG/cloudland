@@ -78,6 +78,7 @@ int64_t code2accessToken(const string& code) {
     int64_t resCode = easy.responseCode();
     if (resCode != 200) {
         LOG_ERROR(easy.responseBody());
+        LOG_ERROR("oauth code: ", code);
         return resCode;
     }
 
@@ -124,6 +125,8 @@ int64_t getDriveInfo(
         return easy.responseCode();
     }
 
+    LOG_WARN(easy.responseBody()) // todo
+
     auto json = nlohmann::json::parse(easy.responseBody());
     if (json.contains("user_id") && userid) {
         *userid = json["user_id"];
@@ -138,7 +141,7 @@ int64_t getDriveInfo(
     }
 
     if (json.contains("resource_drive_id") && resourceDriveId) {
-        *defaultDriveId = json["resource_drive_id"];
+        *resourceDriveId = json["resource_drive_id"];
     }
 
     if (json.contains("backup_drive_id") && backupDriveId) {
@@ -150,6 +153,197 @@ int64_t getDriveInfo(
     return easy.responseCode();
 }
 
+
+FileInfo FileInfo::createFrom(const nlohmann::json& json) {
+    FileInfo info;
+    info.load(json);
+    return info;
+}
+
+
+int FileInfo::load(const nlohmann::json& json) {
+    auto& info = *this;
+    info.error = 0;
+    info.errorMsg.clear();
+    info.isFolder = info.isFile = false;
+    
+    struct {
+        string jsonKey;
+        unsigned long memberOffset;
+        bool optional = false;
+    } batchProcessKeys[] = {
+        { "drive_id", offsetof(FileInfo, driveId) },
+        { "file_id", offsetof(FileInfo, fileId) },
+        { "parent_file_id", offsetof(FileInfo, parentFileId) },
+        { "name", offsetof(FileInfo, name) },
+        { "file_extension", offsetof(FileInfo, fileExtension), true },
+        { "content_hash", offsetof(FileInfo, contentHash), true },
+        { "category", offsetof(FileInfo, category), true },
+        { "thumbnail", offsetof(FileInfo, thumbnail), true },
+        { "url", offsetof(FileInfo, url), true },
+        { "created_at", offsetof(FileInfo, createdAt) },
+        { "updated_at", offsetof(FileInfo, updatedAt) },
+        { "id_path", offsetof(FileInfo, idPath), true },
+        { "name_path", offsetof(FileInfo, namePath), true },
+    };
+
+    for (auto& it : batchProcessKeys) {
+        if (!json.contains(it.jsonKey) || json[it.jsonKey].is_null()) {
+            if (it.optional) 
+                continue;
+
+            info.error = 1;
+            info.errorMsg = "key " + it.jsonKey + " not found.";
+            return info.error;
+        }
+
+        *(string*) (intptr_t(&info) + it.memberOffset) = json[it.jsonKey];
+    }
+
+
+    if (json["type"] == "file") {
+        info.isFile = true;
+    } else if (json["type"] == "folder") {
+        info.isFolder = true;
+    } else {
+        info.error = 2;
+        info.errorMsg = "file type " + ((string) json["type"]) + " unknown.";
+        return info.error;
+    }
+
+
+    info.size = info.isFile ? size_t(json["size"]) : 4096;
+
+
+    return info.error;
+}
+
+
+network::ApiResult<FileInfo> getFileInfoByPath(
+    const string& driveId,
+    const string& filePath
+) {
+    network::ApiResult<FileInfo> result;
+
+    string url = API_HOST + "/adrive/v1.0/openFile/get_by_path";
+    curl::Easy easy;
+    easy.post(url)
+        .setContentTypeJson();
+    addAuthorizationHeader(easy);
+
+    nlohmann::json postBody;
+    postBody["drive_id"] = driveId;
+    postBody["file_path"] = filePath;
+
+    easy.setPostBody(postBody).execute();
+
+    result.code = easy.responseCode();
+
+    if (result.code != 200) {
+        result.msg = easy.responseBody();
+        return result;
+    }
+
+
+    auto json = nlohmann::json::parse(easy.responseBody());
+    FileInfo info = FileInfo::createFrom(json);
+    if (info.error) {
+        result.code = -1;
+        result.msg = "response json error: " + info.errorMsg;
+        return result;
+    }
+
+    result.data = info;
+
+    return result;
+}
+
+
+network::ApiResult<FileInfo> getFileInfo(
+    const string& driveId,
+    const string& fileId
+) {
+network::ApiResult<FileInfo> result;
+
+    string url = API_HOST + "/adrive/v1.0/openFile/get";
+    curl::Easy easy;
+    easy.post(url)
+        .setContentTypeJson();
+    addAuthorizationHeader(easy);
+
+    nlohmann::json postBody;
+    postBody["drive_id"] = driveId;
+    postBody["file_id"] = fileId;
+
+    easy.setPostBody(postBody).execute();
+
+    result.code = easy.responseCode();
+
+    if (result.code != 200) {
+        result.msg = easy.responseBody();
+        return result;
+    }
+
+
+    auto json = nlohmann::json::parse(easy.responseBody());
+    FileInfo info = FileInfo::createFrom(json);
+    if (info.error) {
+        result.code = -1;
+        result.msg = "response json error: " + info.errorMsg;
+        return result;
+    }
+
+    result.data = info;
+
+    return result;
+}
+
+
+network::ApiResult<
+    vector<unique_ptr<FileInfo>>
+> getFileList(
+    const std::string& driveId,
+    const std::string& parentFileId
+) {
+    network::ApiResult<vector<unique_ptr<FileInfo>>> result;
+    nlohmann::json postBody;
+    postBody["drive_id"] = driveId;
+    postBody["parent_file_id"] = parentFileId;
+    postBody["fields"] = "*";
+    postBody["type"] = "all";
+
+    curl::Easy easy;
+    easy.post(API_HOST + "/adrive/v1.0/openFile/list")
+        .setContentTypeJson()
+        .setPostBody(postBody);
+    addAuthorizationHeader(easy);
+    easy.execute();
+
+    result.code = easy.responseCode();
+    if (result.code != 200) {
+        result.msg = easy.responseBody();
+        return result;
+    }
+
+
+    result.data = vector<unique_ptr<FileInfo>> {};
+    auto& items = result.data.value();
+
+    auto json = nlohmann::json::parse(easy.responseBody());
+
+    for (auto& it : json["items"]) {
+        auto p = make_unique<FileInfo>();
+        p->load(it);
+        if (p->error) {
+            LOG_WARN(p->errorMsg)
+            continue;
+        }
+        items.push_back(std::move(p));        
+    }
+
+
+    return result;
+}
 
 
 

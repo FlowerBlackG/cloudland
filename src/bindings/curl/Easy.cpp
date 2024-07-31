@@ -45,7 +45,7 @@ Easy::Easy() {
     this->handle = curl_easy_init();
     
 
-#ifndef NDEBUG
+#ifdef CLOUDLAND_LOG_LIBCURL
     curl_easy_setopt(this->handle, CURLOPT_VERBOSE, 1);
 #endif
 
@@ -123,11 +123,21 @@ Easy& Easy::setRequestMethod(const RequestMethod& method) {
 
 
 Easy& Easy::setPostBody(const string& data) {
-    curl_easy_setopt(this->handle, CURLOPT_COPYPOSTFIELDS, data.data());
+    return setPostBody(data.data());
+}
+
+
+Easy& Easy::setPostBody(const char* data) {
+    curl_easy_setopt(this->handle, CURLOPT_COPYPOSTFIELDS, data);
     postBodyFilled = true;
     return *this;
 }
 
+
+
+Easy& Easy::setPostBody(const nlohmann::json& json) {
+    return setPostBody(json.dump());
+}
 
 
 Easy& Easy::setContentTypeJson() {

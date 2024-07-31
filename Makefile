@@ -75,7 +75,8 @@ clean:
 
 
 .PHONY: --run
---run: --remove-debug-dirs
+--run: 
+	-fusermount3 -q -u ./target/mount-point
 	cd target \
 	&& ./cloudland \
 		--mount-point ./mount-point \

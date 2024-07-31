@@ -14,6 +14,7 @@
 #include <string>
 #include <fstream>
 #include <cstring>
+#include <map>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -29,6 +30,9 @@
 using namespace std;
 using namespace cloudland::bindings;
 
+// todo
+static map<string, string> __fileid_map;
+
 
 namespace cloudland {
 namespace fs {
@@ -37,6 +41,12 @@ namespace alipan {
 
 #define OAUTH_NOTE_FILENAME "login.txt"
 #define OAUTH_NOTE_FILEPATH "/" OAUTH_NOTE_FILENAME
+
+const string ALIPAN_RESOURCE_DRIVE_FOLDER_NAME = "resource";
+const string ALIPAN_BACKUP_DRIVE_FOLDER_NAME = "backup";
+
+const string ALIPAN_RESOURCE_DRIVE_FOLDER_PATH = "/" + ALIPAN_RESOURCE_DRIVE_FOLDER_NAME;
+const string ALIPAN_BACKUP_DRIVE_FOLDER_PATH =  "/" + ALIPAN_BACKUP_DRIVE_FOLDER_NAME;
 
 
 
@@ -65,13 +75,7 @@ FsDriver::FsDriver() {
 
 
 FsDriver::~FsDriver() {
-    auto path = globalData.dataDir + MINI_DB_FILEPATH;
-    auto out = ofstream(path, ios::binary);
-    if (out.is_open()) {
-        out << this->miniDB;
-    } else {
-        LOG_ERROR("[FATAL] Failed to dump minidb (alipan) to ", path, " !");
-    }
+
 }
 
 
@@ -100,16 +104,62 @@ static int guestGetAttr(const string& path, struct stat* st) {
 }
 
 
+static int getAttrOfRoot(struct stat* st) {
+    st->st_gid = getgid();
+    st->st_uid = getuid();
+    st->st_blksize = 4096;
+    st->st_size = 4096;
+    st->st_blocks = 0;
+    st->st_mode = S_IRWXU | S_IFDIR;
+    return 0;
+}
+
+
 int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
+    LOG_TEMPORARY("fsGetAttr | ", path)
     string strPath = path;
 
     if (isNotLoggedIn()) {
         return guestGetAttr(strPath, st);
     }
 
+    if (
+        strPath == "/" 
+        || strPath == ALIPAN_BACKUP_DRIVE_FOLDER_PATH 
+        || strPath == ALIPAN_RESOURCE_DRIVE_FOLDER_PATH
+    ) {
+        __fileid_map[ALIPAN_BACKUP_DRIVE_FOLDER_PATH] = "root"; // todo
+        __fileid_map[ALIPAN_RESOURCE_DRIVE_FOLDER_PATH] = "root"; // todo
+        return getAttrOfRoot(st);
+    }
 
-    LOG_ERROR("not impl")
-    return -ENOSYS;
+
+    string driveId = getDriveId(strPath, true);
+    if (driveId.empty()) {
+        return -ENOENT;
+    }
+
+    auto res = api::getFileInfoByPath(driveId, strPath);
+
+    if (res.code != 200) {
+        return -ENOENT;
+    }
+
+    // now, res.code is 200
+
+    auto& fileInfo = res.data.value();
+
+    st->st_gid = getgid();
+    st->st_uid = getuid();
+    st->st_blksize = 4096;
+    st->st_blocks = (fileInfo.size + st->st_blksize + 1) / st->st_blksize;
+    st->st_size = fileInfo.size;
+    st->st_mode = S_IRWXU;
+    st->st_mode |= fileInfo.isFile ? S_IFREG : S_IFDIR;
+
+    __fileid_map[path] = fileInfo.fileId; // todo
+
+    return 0;
 }
 
 
@@ -174,6 +224,7 @@ int FsDriver::fsTruncate(const char* path, off_t size, fuse_file_info* fi) {
 
 
 int FsDriver::fsOpen(const char* path, fuse_file_info* fi) {
+    LOG_TEMPORARY("fsOpen")
     string strPath = path;
     if (isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
         return 0;
@@ -205,6 +256,7 @@ static int guestRead(const string& path, char* buf, size_t size, off_t offset) {
 
 
 int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
+    LOG_TEMPORARY("fsRead")
     string strPath = path;
     if (isNotLoggedIn()) {
         return guestRead(strPath, buf, size, offset);
@@ -268,6 +320,7 @@ int FsDriver::fsListXAttr(const char* path, char* list, size_t size) {
 
 
 int FsDriver::fsOpenDir(const char* path, fuse_file_info* fi) {
+    LOG_TEMPORARY("fsOpenDir | ", path)
     string strPath = path;
 
     if (isNotLoggedIn()) {
@@ -279,9 +332,7 @@ int FsDriver::fsOpenDir(const char* path, fuse_file_info* fi) {
     }
     
 
-
-    LOG_ERROR("Method not implemented.")
-    return -ENOSYS;
+    return 0;
 }
 
 
@@ -308,6 +359,25 @@ static int guestReadDir(
 }
 
 
+static int readDirOfRoot(  // for users logged-in
+    const string& path, 
+    void* buf,
+    fuse_fill_dir_t filler,
+    off_t offset,
+    fuse_file_info* fi,
+    fuse_readdir_flags flags
+) {
+
+    struct stat st {0};
+    st.st_mode = S_IRWXU | S_IFDIR;
+
+    filler(buf, ALIPAN_BACKUP_DRIVE_FOLDER_NAME.c_str(), &st, 0, FUSE_FILL_DIR_PLUS);
+    filler(buf, ALIPAN_RESOURCE_DRIVE_FOLDER_NAME.c_str(), &st, 0, FUSE_FILL_DIR_PLUS);
+
+    return 0;
+}
+
+
 int FsDriver::fsReadDir(
     const char* path, 
     void* buf, 
@@ -316,14 +386,36 @@ int FsDriver::fsReadDir(
     fuse_file_info* fi, 
     fuse_readdir_flags flags
 ) {
+    LOG_TEMPORARY("fsReadDir | ", path)
     string strPath = path;
+    
     if (isNotLoggedIn()) {
         return guestReadDir(strPath, buf, filler, offset, fi, flags);
+    } else if (strPath == "/") {
+        return readDirOfRoot(strPath, buf, filler, offset, fi, flags);
     }
 
+    string driveId = getDriveId(strPath, true);
+    if (driveId.empty()) {
+        return -ENOENT;
+    }
+
+
+
     
-    LOG_ERROR("Method not implemented.")
-    return -ENOSYS;
+    // todo
+auto res =    api::getFileList(driveId, __fileid_map[path]); // todo
+
+    for (auto& it : res.data.value()) {
+        auto fileInfo = it.get();
+
+        struct stat st {0};
+        st.st_mode = S_IRWXU;
+
+        filler(buf, fileInfo->name.data(), &st, 0, FUSE_FILL_DIR_PLUS);
+    }
+    
+    return 0; // todo
 }
 
 
@@ -342,7 +434,13 @@ void* FsDriver::fsInit(fuse_conn_info* conn, fuse_config* cfg) {
 
 void FsDriver::fsDestroy(void* privateData) {
 
-
+    auto path = globalData.dataDir + MINI_DB_FILEPATH;
+    auto out = ofstream(path, ios::binary);
+    if (out.is_open()) {
+        out << this->miniDB;
+    } else {
+        LOG_ERROR("[FATAL] Failed to dump minidb (alipan) to ", path, " !");
+    }
     
 }
 
@@ -372,15 +470,48 @@ int FsDriver::tryLogin(const string& code) {
     miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN] = api::oauthAccessToken;
     miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC] = api::oauthAccessTokenExpireTimeSec;
 
-    string userid, defaultDriveId;
-    res = api::getDriveInfo(&userid, nullptr, nullptr, &defaultDriveId);
+    string userid, defaultDriveId, backupDriveId, resourceDriveId;
+
+    res = api::getDriveInfo(
+        &userid, nullptr, nullptr, &defaultDriveId, &resourceDriveId, &backupDriveId
+    );
+
     if (res != 200) {
         return -1;
     }
 
     miniDB[MiniDBKey::USERID] = userid;
     miniDB[MiniDBKey::DEFAULT_DRIVE_ID] = defaultDriveId;
+    miniDB[MiniDBKey::BACKUP_DRIVE_ID] = backupDriveId;
+    miniDB[MiniDBKey::RESOURCE_DRIVE_ID] = resourceDriveId;
     return 0;
+}
+
+
+
+string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
+    string driveId;
+    if (
+        path.starts_with(ALIPAN_BACKUP_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_BACKUP_DRIVE_FOLDER_PATH
+    ) {
+
+        driveId = miniDB[MiniDBKey::BACKUP_DRIVE_ID];
+
+        if (removePrefixFromPath)
+            path = path.substr(ALIPAN_BACKUP_DRIVE_FOLDER_PATH.length());
+    
+    } else if (
+
+        path.starts_with(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_RESOURCE_DRIVE_FOLDER_PATH
+    
+    ) {
+        driveId = miniDB[MiniDBKey::RESOURCE_DRIVE_ID];
+    
+        if (removePrefixFromPath)
+            path = path.substr(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH.length());
+    }
+
+    return driveId;
 }
 
 

@@ -63,6 +63,22 @@ public:
 
     int tryLogin(const std::string& code);
 
+    /**
+     * Get Drive ID from path.
+     * Aliyun's drive contains two drive: resource and backup.
+     * 
+     * In cloudland, we make paths which starts with /resource directed to resource drive,
+     * while /backup directed to backup drive.
+     * 
+     * Use this method to determine which drive to use, also filter bad path accesses.
+     * 
+     * @param path Original path.
+     * @param removePrefixFromPath When set to true, parameter `path` would be modified to 
+     *                             path in drive. 
+     * @return Null if path is related to neither drive.
+     */
+    std::string getDriveId(std::string& path, bool removePrefixFromPath);
+
 
 CLOUDLAND_FS_PREPARE_CLASS_HEADER()
 

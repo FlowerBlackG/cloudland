@@ -7,6 +7,13 @@ cmake_minimum_required(VERSION 3.29.2)
 
 
 #[[
+    Options
+]]
+option(CLOUDLAND_LOG_FUSE OFF)
+option(CLOUDLAND_LOG_LIBCURL OFF)
+
+
+#[[
     Cloud Land version
 ]]
 set(CLOUDLAND_VERSION_MAJOR 1)
