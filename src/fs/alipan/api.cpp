@@ -12,6 +12,9 @@
 #include "../../utils/Log.h"
 #include "../../utils/Time.h"
 
+#include <chrono>
+#include <ctime>
+
 using namespace std;
 using namespace cloudland::bindings;
 
@@ -216,6 +219,26 @@ int FileInfo::load(const nlohmann::json& json) {
 
 
     return info.error;
+}
+
+
+
+static time_t iso8601ToSecs(const string& iso) {
+    istringstream in {iso};
+    chrono::sys_time<chrono::seconds> tp;
+    in >> chrono::parse("%Y-%m-%dT%H:%M:%S.", tp);
+
+    return tp.time_since_epoch().count();
+}
+
+
+time_t FileInfo::getUpdatedAtSecs() {
+    return iso8601ToSecs(this->updatedAt);
+}
+
+
+time_t FileInfo::getCreatedAtSecs() {
+    return iso8601ToSecs(this->createdAt);
 }
 
 

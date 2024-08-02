@@ -56,6 +56,8 @@ struct FileInfo {
 
     static FileInfo createFrom(const nlohmann::json& json);
     int load(const nlohmann::json& json);
+    time_t getUpdatedAtSecs();
+    time_t getCreatedAtSecs();
 
     int error = 0;
     std::string errorMsg;

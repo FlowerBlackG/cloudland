@@ -57,6 +57,7 @@ public:
     virtual fuse_operations* getFuseOperations();
 
 
+    bool ready = false;
 };
 
 

@@ -14,6 +14,10 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
+#include <memory>
+#include <thread>
+#include "./MiniDB.h"
+#include "./FileService.h"
 
 
 namespace cloudland {
@@ -90,28 +94,12 @@ public:
 
 protected:
 
-    nlohmann::json miniDB;
+    std::shared_ptr<MiniDB> miniDB;
+    std::shared_ptr<FileService> fileService;
 
 
 };
 
-
-
-struct MiniDBKey {
-protected:
-    MiniDBKey() = delete;
-
-public:
-    static std::string OAUTH_ACCESS_TOKEN;
-    static std::string OAUTH_REFRESH_TOKEN;
-    static std::string OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC;
-
-    static std::string USERID;
-    static std::string DEFAULT_DRIVE_ID;
-    static std::string RESOURCE_DRIVE_ID;
-    static std::string BACKUP_DRIVE_ID;
-
-};
 
 
 

@@ -15,6 +15,9 @@
 #include <fstream>
 #include <cstring>
 #include <map>
+#include <chrono>
+#include <ctime>
+#include <sstream>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -25,6 +28,7 @@
 #include "../../bindings/curl.h"
 #include "../../utils/Time.h"
 #include "./api.h"
+#include "./MiniDB.h"
 
 
 using namespace std;
@@ -62,15 +66,32 @@ CLOUDLAND_FS_PREPARE_CLASS_CPP()
 
 static const string MINI_DB_FILEPATH = "/minidb.json";  // in data dir
 FsDriver::FsDriver() {
+
+    this->miniDB = make_shared<MiniDB>();
+    if (this->miniDB == nullptr) {
+        LOG_ERROR("failed to alloc MiniDB for Fs Driver!");
+        return;
+    }
+
     auto in = ifstream(globalData.dataDir + MINI_DB_FILEPATH, ios::binary);
     if (in.is_open()) {
-        in >> this->miniDB;
+        this->miniDB->load(in);
     }
 
     if (isLoggedIn()) {
-        api::oauthAccessToken = miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN];
-        api::oauthAccessTokenExpireTimeSec = miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC];
+        api::oauthAccessToken = miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN];
+        api::oauthAccessTokenExpireTimeSec = miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC];
     }
+
+
+    // make FileService
+    this->fileService = make_shared<FileService>(this->miniDB);
+    if (this->fileService == nullptr) {
+        LOG_ERROR("failed to prepare File Service!")
+        return;
+    }
+
+    this->ready = true;
 }
 
 
@@ -156,6 +177,9 @@ int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
     st->st_size = fileInfo.size;
     st->st_mode = S_IRWXU;
     st->st_mode |= fileInfo.isFile ? S_IFREG : S_IFDIR;
+
+    st->st_ctim.tv_sec = fileInfo.getCreatedAtSecs();
+    st->st_mtim.tv_sec = fileInfo.getUpdatedAtSecs();
 
     __fileid_map[path] = fileInfo.fileId; // todo
 
@@ -428,16 +452,20 @@ int FsDriver::fsReleaseDir(const char* path, fuse_file_info* fi) {
 
 void* FsDriver::fsInit(fuse_conn_info* conn, fuse_config* cfg) {
     
+    this->fileService->startLoop();
+
     return nullptr;
 }
 
 
 void FsDriver::fsDestroy(void* privateData) {
 
+    this->fileService->stopLoop(true);
+
     auto path = globalData.dataDir + MINI_DB_FILEPATH;
     auto out = ofstream(path, ios::binary);
     if (out.is_open()) {
-        out << this->miniDB;
+        this->miniDB->dump(out);
     } else {
         LOG_ERROR("[FATAL] Failed to dump minidb (alipan) to ", path, " !");
     }
@@ -467,8 +495,8 @@ int FsDriver::tryLogin(const string& code) {
         return -1;
     }
 
-    miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN] = api::oauthAccessToken;
-    miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC] = api::oauthAccessTokenExpireTimeSec;
+    miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN] = api::oauthAccessToken;
+    miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC] = api::oauthAccessTokenExpireTimeSec;
 
     string userid, defaultDriveId, backupDriveId, resourceDriveId;
 
@@ -480,10 +508,10 @@ int FsDriver::tryLogin(const string& code) {
         return -1;
     }
 
-    miniDB[MiniDBKey::USERID] = userid;
-    miniDB[MiniDBKey::DEFAULT_DRIVE_ID] = defaultDriveId;
-    miniDB[MiniDBKey::BACKUP_DRIVE_ID] = backupDriveId;
-    miniDB[MiniDBKey::RESOURCE_DRIVE_ID] = resourceDriveId;
+    miniDB->db[MiniDBKey::USERID] = userid;
+    miniDB->db[MiniDBKey::DEFAULT_DRIVE_ID] = defaultDriveId;
+    miniDB->db[MiniDBKey::BACKUP_DRIVE_ID] = backupDriveId;
+    miniDB->db[MiniDBKey::RESOURCE_DRIVE_ID] = resourceDriveId;
     return 0;
 }
 
@@ -495,7 +523,7 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
         path.starts_with(ALIPAN_BACKUP_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_BACKUP_DRIVE_FOLDER_PATH
     ) {
 
-        driveId = miniDB[MiniDBKey::BACKUP_DRIVE_ID];
+        driveId = miniDB->db[MiniDBKey::BACKUP_DRIVE_ID];
 
         if (removePrefixFromPath)
             path = path.substr(ALIPAN_BACKUP_DRIVE_FOLDER_PATH.length());
@@ -505,7 +533,7 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
         path.starts_with(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_RESOURCE_DRIVE_FOLDER_PATH
     
     ) {
-        driveId = miniDB[MiniDBKey::RESOURCE_DRIVE_ID];
+        driveId = miniDB->db[MiniDBKey::RESOURCE_DRIVE_ID];
     
         if (removePrefixFromPath)
             path = path.substr(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH.length());
@@ -516,19 +544,19 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
 
 
 bool FsDriver::isLoggedIn() {
-    if (!miniDB.contains(MiniDBKey::OAUTH_ACCESS_TOKEN)) {
+    if (!miniDB->contains(MiniDBKey::OAUTH_ACCESS_TOKEN)) {
         return false;
     }
 
-    time_t expireTimeSec = miniDB[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC];
+    time_t expireTimeSec = miniDB->getLong(MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC);
 
     if (expireTimeSec < utils::time::currentTimeSecs()) {
-        miniDB.erase(MiniDBKey::OAUTH_ACCESS_TOKEN);
-        miniDB.erase(MiniDBKey::OAUTH_REFRESH_TOKEN);
-        miniDB.erase(MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC);
+        miniDB->erase(MiniDBKey::OAUTH_ACCESS_TOKEN);
+        miniDB->erase(MiniDBKey::OAUTH_REFRESH_TOKEN);
+        miniDB->erase(MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC);
         return false;  // access token expired.
     }
-    
+
 
     return true;
 }
@@ -539,17 +567,6 @@ bool FsDriver::isNotLoggedIn() {
 }
 
 
-
-// minidb keys' definitions
-
-string MiniDBKey::OAUTH_ACCESS_TOKEN = "oauth-access-token";
-string MiniDBKey::OAUTH_REFRESH_TOKEN = "oauth-refresh-token";
-string MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC = "oauth-access-token-expire-time-sec";
-
-string MiniDBKey::USERID = "alipan-userid";
-string MiniDBKey::DEFAULT_DRIVE_ID = "alipan-default-drive-id";
-string MiniDBKey::RESOURCE_DRIVE_ID = "alipan-resource-drive-id";
-string MiniDBKey::BACKUP_DRIVE_ID = "alipan-backup-drive-id";
 
 
 }  // namespace alipan
