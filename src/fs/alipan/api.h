@@ -13,7 +13,12 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include "../../network/ApiResult.h"
+#include "./FileTree.h"
+
+
+namespace cloudland::fs::alipan { class MiniDB; }
 
 
 namespace cloudland {
@@ -21,18 +26,18 @@ namespace fs {
 namespace alipan {
 namespace api {
 
-extern std::string oauthAccessToken;
-extern std::string oauthRefreshToken;
-extern time_t oauthAccessTokenExpireTimeSec;
+
+extern std::shared_ptr<MiniDB> miniDB;
 
 
-
-
+bool isLoggedIn();
+bool isNotLoggedIn();
 
 const std::string oauthAuthorizeUrl();
-int64_t code2accessToken(const std::string& code);
+HttpStatusCode code2accessToken(const std::string& code);
+int tryLogin(const std::string& code);
 
-int64_t getDriveInfo(
+HttpStatusCode getDriveInfo(
     std::string* userid = nullptr,
     std::string* username = nullptr,
     std::string* userAvatar = nullptr,
@@ -41,27 +46,6 @@ int64_t getDriveInfo(
     std::string* backupDriveId = nullptr
 );
 
-
-
-
-struct FileInfo {
-    std::string driveId, fileId, parentFileId, name, fileExtension, contentHash,
-        category, thumbnail, url, createdAt, updatedAt, idPath, namePath;
-
-    size_t size = 0;
-
-    bool isFolder = false;
-    bool isFile = false;
-
-
-    static FileInfo createFrom(const nlohmann::json& json);
-    int load(const nlohmann::json& json);
-    time_t getUpdatedAtSecs();
-    time_t getCreatedAtSecs();
-
-    int error = 0;
-    std::string errorMsg;
-};
 
 
 network::ApiResult<FileInfo> getFileInfoByPath(
@@ -88,7 +72,7 @@ network::ApiResult<
 
 }  // namespace api
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 
 

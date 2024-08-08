@@ -36,51 +36,81 @@ string MiniDBKey::BACKUP_DRIVE_ID = "alipan-backup-drive-id";
 
 string MiniDBKey::FILE_SERVICE_DATA = "file-service-data";
 
+#define CLOUDLAND_MINIDB_USE_LOCK() \
+    lock_guard<recursive_mutex> __cloudland_minidb_use_lock_lock_guard {this->dbLock}
+
+
+MiniDB::~MiniDB() {
+    CLOUDLAND_MINIDB_USE_LOCK();
+}
+
 
 void MiniDB::load(istream& in) {
+    CLOUDLAND_MINIDB_USE_LOCK();
     in >> this->db;
 }
 
 
 void MiniDB::dump(ostream& out) {
+    CLOUDLAND_MINIDB_USE_LOCK();
     out << this->db;
 }
 
 
 bool MiniDB::contains(const string& key) {
+    CLOUDLAND_MINIDB_USE_LOCK();
     return this->db.contains(key);
 }
 
 
 
 void MiniDB::erase(const std::string& key) {
-    this->db.erase(key);
+    CLOUDLAND_MINIDB_USE_LOCK();
+    if (this->db.contains(key))
+        this->db.erase(key);
 }
 
 
 int64_t MiniDB::getLong(const string& key) {
+    CLOUDLAND_MINIDB_USE_LOCK();
     return (int64_t) this->db[key];
 }
 
 
 int64_t MiniDB::getLong(const string& key, int64_t fallback) {
-    return contains(key) ? getLong(key) : fallback;
+    CLOUDLAND_MINIDB_USE_LOCK();
+    return db.contains(key) ? getLong(key) : fallback;
 }
 
 
 
 string MiniDB::getString(const string& key) {
+    CLOUDLAND_MINIDB_USE_LOCK();
     return (string) this->db[key];
 }
 
 
 string MiniDB::getString(const string& key, const string& fallback) {
-    return contains(key) ? getString(key) : fallback;
+    CLOUDLAND_MINIDB_USE_LOCK();
+    return db.contains(key) ? getString(key) : fallback;
 }
 
 
 
+
+void MiniDB::withLock(function<void()>& func) {
+    CLOUDLAND_MINIDB_USE_LOCK();
+    func();
+}
+
+
+void MiniDB::useDB(const std::function<void(nlohmann::json&)>& func) {
+    CLOUDLAND_MINIDB_USE_LOCK();
+    func(this->db);
+}
+
+
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 

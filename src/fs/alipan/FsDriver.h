@@ -65,8 +65,6 @@ public:
     
 
 
-    int tryLogin(const std::string& code);
-
     /**
      * Get Drive ID from path.
      * Aliyun's drive contains two drive: resource and backup.
@@ -87,11 +85,6 @@ public:
 CLOUDLAND_FS_PREPARE_CLASS_HEADER()
 
 
-public:
-    bool isLoggedIn();
-    bool isNotLoggedIn();
-
-
 protected:
 
     std::shared_ptr<MiniDB> miniDB;
@@ -104,6 +97,6 @@ protected:
 
 
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 

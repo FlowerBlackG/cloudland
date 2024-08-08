@@ -12,6 +12,8 @@
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <string>
+#include <mutex>
+#include <functional>
 
 
 namespace cloudland {
@@ -41,6 +43,7 @@ public:
 
 class MiniDB {
 public:
+    ~MiniDB();
 
     void load(std::istream&);
     void dump(std::ostream&);
@@ -54,13 +57,18 @@ public:
     std::string getString(const std::string& key);
     std::string getString(const std::string& key, const std::string& fallback);
     
+    void withLock(std::function<void()>&);
+    void useDB(const std::function<void(nlohmann::json&)>&);
+
+protected:
 
     nlohmann::json db;
+    std::recursive_mutex dbLock;
 
 };
 
 
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 

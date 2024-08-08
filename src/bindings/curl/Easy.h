@@ -19,6 +19,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "./SList.h"
+#include "../../network/HttpStatusCode.h"
 
 
 namespace cloudland {
@@ -56,6 +57,7 @@ public:
 
 
     int64_t responseCode();
+    HttpStatusCode httpStatusCode();
     
     std::string responseBody();
 

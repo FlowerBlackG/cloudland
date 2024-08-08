@@ -22,12 +22,17 @@ void globalInit() {
     if (initialized) {
         return;
     }
+    
+    initialized = true;
 
     curl_global_init(CURL_GLOBAL_ALL);
-    initialized = true;
 }
 
 
+/**
+ * 
+ * This is called automatically only once. So it's thread-safe.
+ */
 static void globalCleanup() {
 
     if (cleaned || !initialized) {

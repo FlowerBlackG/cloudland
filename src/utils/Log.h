@@ -18,8 +18,7 @@
 #include "./ConsoleColorPad.h"
 
 
-namespace cloudland {
-namespace log {
+namespace cloudland::log {
 
 extern std::binary_semaphore logLock;
 
@@ -55,8 +54,7 @@ inline void setColorError() {
 }
 
 
-} // namespace log
-} // namespace cloudland
+} // namespace cloudland::log
 
 
 #ifndef __FILE_NAME__

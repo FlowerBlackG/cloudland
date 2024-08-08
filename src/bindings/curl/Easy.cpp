@@ -175,6 +175,11 @@ int64_t Easy::responseCode() {
 }
 
 
+HttpStatusCode Easy::httpStatusCode() {
+    return static_cast<HttpStatusCode>(this->httpResponseCode);
+}
+
+
 string Easy::responseBody() {
     return this->recvBuf.str();
 }

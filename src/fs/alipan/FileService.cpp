@@ -18,17 +18,18 @@ namespace fs {
 namespace alipan {
 
 
+#define CLOUDLAND_FILE_SERVICE_DB_USE_LOCK() \
+    lock_guard<recursive_mutex> __cl_fileservice_db_uselock_lg {this->locks.db}
+
+
 FileService::FileService(shared_ptr<MiniDB> miniDB) {
     this->miniDB = miniDB;
 }
 
 
 FileService::~FileService() {
+    this->stopLoop(true);
     this->dumpToMiniDB();
-
-    if (this->loopThread) {
-        this->loopThread->join();
-    }
 }
 
 
@@ -37,9 +38,12 @@ void FileService::dumpToMiniDB() {
         return;
     }
 
+
     {
-        lock_guard<mutex> lock {this->locks.db};
-        miniDB->db[MiniDBKey::FILE_SERVICE_DATA] = this->db;
+        CLOUDLAND_FILE_SERVICE_DB_USE_LOCK();
+        miniDB->useDB([&] (nlohmann::json& db) {
+            db[MiniDBKey::FILE_SERVICE_DATA] = this->db;
+        });
     }
 }
 
@@ -75,6 +79,6 @@ void FileService::loop() {
 
 
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 

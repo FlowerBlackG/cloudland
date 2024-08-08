@@ -14,6 +14,17 @@ namespace bindings {
 namespace curl {
 
 
+/**
+ * It calls curl_global_cleanup(). You should never (and must not) 
+ * mind curl_global_cleanup().
+ * 
+ * Can be called multiple times.
+ * 
+ * Once called and returned, following calls would be ignored.
+ * 
+ * If called when first call is still executing (not returned),
+ * it occurs undefined behaviours.
+ */
 void globalInit();
 
 

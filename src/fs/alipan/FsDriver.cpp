@@ -53,6 +53,8 @@ const string ALIPAN_RESOURCE_DRIVE_FOLDER_PATH = "/" + ALIPAN_RESOURCE_DRIVE_FOL
 const string ALIPAN_BACKUP_DRIVE_FOLDER_PATH =  "/" + ALIPAN_BACKUP_DRIVE_FOLDER_NAME;
 
 
+static const string MINI_DB_FILEPATH = "/minidb.json";  // in data dir
+
 
 static const string makeLoginNoteFileContent() {
     string res = "open link below in any browser, replace all of this file's content to the response uri, then close this file. \n\n";
@@ -64,7 +66,7 @@ static const string makeLoginNoteFileContent() {
 CLOUDLAND_FS_PREPARE_CLASS_CPP()
 
 
-static const string MINI_DB_FILEPATH = "/minidb.json";  // in data dir
+
 FsDriver::FsDriver() {
 
     this->miniDB = make_shared<MiniDB>();
@@ -78,10 +80,7 @@ FsDriver::FsDriver() {
         this->miniDB->load(in);
     }
 
-    if (isLoggedIn()) {
-        api::oauthAccessToken = miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN];
-        api::oauthAccessTokenExpireTimeSec = miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC];
-    }
+    api::miniDB = this->miniDB;
 
 
     // make FileService
@@ -140,7 +139,7 @@ int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
     LOG_TEMPORARY("fsGetAttr | ", path)
     string strPath = path;
 
-    if (isNotLoggedIn()) {
+    if (api::isNotLoggedIn()) {
         return guestGetAttr(strPath, st);
     }
 
@@ -162,24 +161,14 @@ int FsDriver::fsGetAttr(const char* path, struct stat* st, fuse_file_info* fi) {
 
     auto res = api::getFileInfoByPath(driveId, strPath);
 
-    if (res.code != 200) {
+    if (res.code != HttpStatusCode::OK) {
         return -ENOENT;
     }
 
     // now, res.code is 200
 
     auto& fileInfo = res.data.value();
-
-    st->st_gid = getgid();
-    st->st_uid = getuid();
-    st->st_blksize = 4096;
-    st->st_blocks = (fileInfo.size + st->st_blksize + 1) / st->st_blksize;
-    st->st_size = fileInfo.size;
-    st->st_mode = S_IRWXU;
-    st->st_mode |= fileInfo.isFile ? S_IFREG : S_IFDIR;
-
-    st->st_ctim.tv_sec = fileInfo.getCreatedAtSecs();
-    st->st_mtim.tv_sec = fileInfo.getUpdatedAtSecs();
+    fileInfo.to(st);
 
     __fileid_map[path] = fileInfo.fileId; // todo
 
@@ -250,7 +239,7 @@ int FsDriver::fsTruncate(const char* path, off_t size, fuse_file_info* fi) {
 int FsDriver::fsOpen(const char* path, fuse_file_info* fi) {
     LOG_TEMPORARY("fsOpen")
     string strPath = path;
-    if (isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
+    if (api::isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
         return 0;
     }
 
@@ -282,7 +271,7 @@ static int guestRead(const string& path, char* buf, size_t size, off_t offset) {
 int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fuse_file_info* fi) {
     LOG_TEMPORARY("fsRead")
     string strPath = path;
-    if (isNotLoggedIn()) {
+    if (api::isNotLoggedIn()) {
         return guestRead(strPath, buf, size, offset);
     }
 
@@ -293,7 +282,7 @@ int FsDriver::fsRead(const char* path, char* buf, size_t size, off_t offset, fus
 
 int FsDriver::fsWrite(const char* path, const char* buf, size_t size, off_t offset, fuse_file_info* fi) {
     string strPath = path;
-    if (isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
+    if (api::isNotLoggedIn() && strPath == OAUTH_NOTE_FILEPATH) {
         string content = buf;
         auto posOfCode = content.rfind("code=");
         if (posOfCode == string::npos) {
@@ -301,7 +290,7 @@ int FsDriver::fsWrite(const char* path, const char* buf, size_t size, off_t offs
         }
 
         auto oauthCode = content.substr(posOfCode + strlen("code="));
-        auto tryLoginResCode = tryLogin(oauthCode);
+        auto tryLoginResCode = api::tryLogin(oauthCode);
         if (tryLoginResCode) {
             return -ENOENT;
         } else {
@@ -347,7 +336,7 @@ int FsDriver::fsOpenDir(const char* path, fuse_file_info* fi) {
     LOG_TEMPORARY("fsOpenDir | ", path)
     string strPath = path;
 
-    if (isNotLoggedIn()) {
+    if (api::isNotLoggedIn()) {
         if (strPath != "/") {
             return -ENOSYS;
         } else {
@@ -413,7 +402,7 @@ int FsDriver::fsReadDir(
     LOG_TEMPORARY("fsReadDir | ", path)
     string strPath = path;
     
-    if (isNotLoggedIn()) {
+    if (api::isNotLoggedIn()) {
         return guestReadDir(strPath, buf, filler, offset, fi, flags);
     } else if (strPath == "/") {
         return readDirOfRoot(strPath, buf, filler, offset, fi, flags);
@@ -487,35 +476,6 @@ int FsDriver::fsCreate(const char* path, mode_t mode, fuse_file_info* fi) {
 }
 
 
-int FsDriver::tryLogin(const string& code) {
-    // get access_token
-
-    auto res = api::code2accessToken(code);
-    if (res != 200) {
-        return -1;
-    }
-
-    miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN] = api::oauthAccessToken;
-    miniDB->db[MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC] = api::oauthAccessTokenExpireTimeSec;
-
-    string userid, defaultDriveId, backupDriveId, resourceDriveId;
-
-    res = api::getDriveInfo(
-        &userid, nullptr, nullptr, &defaultDriveId, &resourceDriveId, &backupDriveId
-    );
-
-    if (res != 200) {
-        return -1;
-    }
-
-    miniDB->db[MiniDBKey::USERID] = userid;
-    miniDB->db[MiniDBKey::DEFAULT_DRIVE_ID] = defaultDriveId;
-    miniDB->db[MiniDBKey::BACKUP_DRIVE_ID] = backupDriveId;
-    miniDB->db[MiniDBKey::RESOURCE_DRIVE_ID] = resourceDriveId;
-    return 0;
-}
-
-
 
 string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
     string driveId;
@@ -523,7 +483,7 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
         path.starts_with(ALIPAN_BACKUP_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_BACKUP_DRIVE_FOLDER_PATH
     ) {
 
-        driveId = miniDB->db[MiniDBKey::BACKUP_DRIVE_ID];
+        driveId = miniDB->getString(MiniDBKey::BACKUP_DRIVE_ID, "");
 
         if (removePrefixFromPath)
             path = path.substr(ALIPAN_BACKUP_DRIVE_FOLDER_PATH.length());
@@ -533,7 +493,7 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
         path.starts_with(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH + "/") || path == ALIPAN_RESOURCE_DRIVE_FOLDER_PATH
     
     ) {
-        driveId = miniDB->db[MiniDBKey::RESOURCE_DRIVE_ID];
+        driveId = miniDB->getString(MiniDBKey::RESOURCE_DRIVE_ID, "");
     
         if (removePrefixFromPath)
             path = path.substr(ALIPAN_RESOURCE_DRIVE_FOLDER_PATH.length());
@@ -543,33 +503,8 @@ string FsDriver::getDriveId(string& path, bool removePrefixFromPath) {
 }
 
 
-bool FsDriver::isLoggedIn() {
-    if (!miniDB->contains(MiniDBKey::OAUTH_ACCESS_TOKEN)) {
-        return false;
-    }
-
-    time_t expireTimeSec = miniDB->getLong(MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC);
-
-    if (expireTimeSec < utils::time::currentTimeSecs()) {
-        miniDB->erase(MiniDBKey::OAUTH_ACCESS_TOKEN);
-        miniDB->erase(MiniDBKey::OAUTH_REFRESH_TOKEN);
-        miniDB->erase(MiniDBKey::OAUTH_ACCESS_TOKEN_EXPIRE_TIME_SEC);
-        return false;  // access token expired.
-    }
-
-
-    return true;
-}
-
-
-bool FsDriver::isNotLoggedIn() {
-    return !this->isLoggedIn();
-}
-
-
-
 
 }  // namespace alipan
-}  // namespace cloudland
 }  // namespace fs
+}  // namespace cloudland
 

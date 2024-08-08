@@ -13,13 +13,16 @@
 #include <string>
 #include <optional>
 
+
+#include "./HttpStatusCode.h"
+
 namespace cloudland {
 namespace network {
 
 
 template<typename T>
 struct ApiResult {
-    int64_t code;
+    HttpStatusCode code;
     std::string msg;
     std::optional<T> data;
 };
