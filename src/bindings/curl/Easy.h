@@ -60,6 +60,7 @@ public:
     HttpStatusCode httpStatusCode();
     
     std::string responseBody();
+    nlohmann::json responseBodyJson();
 
 public:
     std::stringstream recvBuf;

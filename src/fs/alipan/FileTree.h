@@ -19,8 +19,10 @@ namespace cloudland::fs::alipan {
 
 
 struct FileTree {
-    FileInfo attr;
-    
+    FileTree();
+    FileTree(const nlohmann::json&);
+    FileTree(const FileInfo&);
+
     bool isFile();
     bool isFolder();
 
@@ -32,6 +34,15 @@ struct FileTree {
      */
     FileTree& addChild(FileTree*);
 
+    /**
+     * {
+     *     ...attr.getJson(),
+     *     "children": [ children.forEach { it.toJson() } ]
+     * }
+     */
+    nlohmann::json toJson();
+
+    FileInfo attr;
     std::vector<std::shared_ptr<FileTree>> children;
 };
 

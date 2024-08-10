@@ -109,6 +109,11 @@ time_t FileInfo::getCreatedAtSecs() {
 }
 
 
+nlohmann::json& FileInfo::getJson() {
+    return this->json;
+}
+
+
 void FileInfo::to(struct stat* st) {
     st->st_gid = getgid();
     st->st_uid = getuid();

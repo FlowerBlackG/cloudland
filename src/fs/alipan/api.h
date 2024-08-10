@@ -69,6 +69,20 @@ network::ApiResult<
 );
 
 
+struct DownloadUrlData {
+    std::string url;
+    std::string expiration;
+    std::string method; 
+};
+
+
+network::ApiResult<DownloadUrlData> getDownloadUrl(
+    const std::string& driveId,
+    const std::string& fileId,
+    time_t expireSec = 900
+);
+
+
 
 }  // namespace api
 }  // namespace alipan

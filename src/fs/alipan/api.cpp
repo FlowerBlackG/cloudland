@@ -349,6 +349,40 @@ network::ApiResult<
 }
 
 
+network::ApiResult<DownloadUrlData> getDownloadUrl(
+    const std::string& driveId,
+    const std::string& fileId,
+    time_t expireSec
+) {
+    network::ApiResult<DownloadUrlData> result;
+    nlohmann::json postBody;
+    postBody["drive_id"] = driveId;
+    postBody["file_id"] = fileId;
+    postBody["expire_sec"] = expireSec;
+
+    curl::Easy easy;
+    easy.post(API_HOST + "/adrive/v1.0/openFile/getDownloadUrl")
+        .setContentTypeJson()
+        .setPostBody(postBody);
+    addAuthorizationHeader(easy);
+
+    easy.execute();
+    result.code = easy.httpStatusCode();
+    
+    if (result.code != HttpStatusCode::OK) {
+        result.msg = easy.responseBody();
+        return result;
+    }
+
+    result.data.emplace();
+    auto json = easy.responseBodyJson();
+    result.data->url = json["url"];
+    result.data->method = json["method"];
+    result.data->expiration = json["expiration"];
+
+    return result;
+}
+
 
 }  // namespace api
 }  // namespace alipan

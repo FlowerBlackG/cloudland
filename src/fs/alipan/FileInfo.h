@@ -20,8 +20,8 @@ namespace fs {
 namespace alipan {
 
 
-
 struct FileInfo {
+
     std::string driveId, fileId, parentFileId, name, fileExtension, contentHash,
         category, thumbnail, url, createdAt, updatedAt, idPath, namePath;
 
@@ -36,10 +36,16 @@ struct FileInfo {
     time_t getUpdatedAtSecs();
     time_t getCreatedAtSecs();
 
+    nlohmann::json& getJson();
+
     void to(struct stat*);
 
     int error = 0;
     std::string errorMsg;
+    
+    /**
+     * should get this by getJson().
+     */
     nlohmann::json json;
 };
 

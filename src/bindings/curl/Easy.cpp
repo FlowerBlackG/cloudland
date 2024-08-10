@@ -185,6 +185,11 @@ string Easy::responseBody() {
 }
 
 
+nlohmann::json Easy::responseBodyJson() {
+    return nlohmann::json::parse(this->responseBody());
+}
+
+
 
 }  // namespace curl
 }  // namespace bindings
